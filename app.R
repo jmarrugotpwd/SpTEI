@@ -9,13 +9,8 @@ library(DT)
 library(shinyBS)
 library(rsconnect)
 
-#shiny app deployment
-rsconnect::writeManifest()
-
-app_dir <- "E:/Species Data Assessment/SpTEI_ShinyApp/data"
-source(file.path(app_dir, "directions.R"), local = TRUE)
-
-precomputed <- readRDS(file.path(app_dir, "precomputed_app_data.rds"))
+source("data/directions.R")
+precomputed <- readRDS("data/precomputed_app_data.rds")
 
 species_data       <- precomputed$species_data
 COA_EMS            <- precomputed$COA_EMS
