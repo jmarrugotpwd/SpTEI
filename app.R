@@ -9,9 +9,8 @@ library(DT)
 library(shinyBS)
 library(rsconnect)
 
-app_dir <- "E:/Species Data Assessment/SpTEI_ShinyApp/data"
+app_dir <- "data"
 source(file.path(app_dir, "directions.R"), local = TRUE)
-
 precomputed <- readRDS(file.path(app_dir, "precomputed_app_data.rds"))
 
 species_data       <- precomputed$species_data
