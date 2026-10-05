@@ -9,13 +9,15 @@ library(DT)
 library(shinyBS)
 library(rsconnect)
 
-source("data/directions.R")
-precomputed <- readRDS("data/precomputed_app_data.rds")
+app_dir <- "E:/Species Data Assessment/SpTEI_ShinyApp/data"
+source(file.path(app_dir, "directions.R"), local = TRUE)
+
+precomputed <- readRDS(file.path(app_dir, "precomputed_app_data.rds"))
 
 species_data       <- precomputed$species_data
 COA_EMS            <- precomputed$COA_EMS
 hotspot_points     <- precomputed$hotspot_points
-species_metadata   <- precomputed$species_metadata
+metadata_species   <- precomputed$species_metadata
 species_lookup     <- precomputed$species_lookup
 species_choices    <- precomputed$species_choices
 available_species  <- precomputed$available_species
@@ -124,85 +126,182 @@ ui <- fluidPage(
 ")),
   titlePanel(div(class = "title-panel", "Multi-SGCN Assessment Tool")),
   sidebarLayout(
-    sidebarPanel(width = 3,
-                 div(class = "sidebar-section",
-                     h4("Species Filters"),
-                     selectInput("taxa_group", "Taxa Group:",
-                                 choices = c("All", sort(unique(na.omit(species_metadata$Taxa_Group))))),
-                     selectInput("game_status", "Game Status:",
-                                 choices = c("All", sort(unique(na.omit(species_metadata$Game_Status))))),
-                     selectInput("habitat_clade", "Habitat Clade:",
-                                 choices = c("All", sort(unique(na.omit(species_metadata$Habitat_Clade)))))),
-                 hr(),
-                 div(class="sidebar-section",
-                     h4("Species Selection"),
-                     fluidRow(
-                       column(6, actionButton("select_all_species", "Select All", icon = icon("check"))),
-                       column(6, actionButton("clear_all_species", "Clear All", icon = icon("times")))),
-                     br(),
-                     selectizeInput(
-                       "species_picker", "Select Species:",
-                       choices = names(species_choices),
-                       multiple = TRUE,
-                       options = list(placeholder = "Search species...", plugins = list("restore_on_backspace"))
-                     ),
-                     br(),
-                     fluidRow(
-                       column(6, actionButton("run_assessment", "Run", icon = icon("play"), class="btn btn-primary btn-block")),
-                       column(6, actionButton("reset_assessment", "Reset", icon = icon("refresh"), class="btn btn-secondary btn-block"))
-                     ),
-                     helpText("Select one or more species to assess.")
-                 ),
-                 hr(),
-                 div(class="sidebar-section", strong("Selected species:"), uiOutput("selected_species_display")
-                 ),
-                 hr(),
-                 div(class="sidebar-section", h4("Export Results"), downloadButton("download_results", "Download CSV")
-                 )
+    sidebarPanel(
+      width = 3,
+      div(class = "sidebar-section",
+          h4("Species Filters"),
+          selectInput("taxa_group", "Taxa Group:",
+                      choices = c("All", sort(unique(na.omit(metadata_species$Taxa_Group))))),
+          selectInput("game_status", "Game Status:",
+                      choices = c("All", sort(unique(na.omit(metadata_species$Game_Status))))),
+          selectInput("habitat_clade", "Habitat Clade:",
+                      choices = c("All", sort(unique(na.omit(metadata_species$Habitat_Clade)))))
+      ),
+      hr(),
+      div(class="sidebar-section",
+          h4("Species Selection"),
+          fluidRow(
+            column(6, actionButton("select_all_species", "Select All", icon = icon("check"))),
+            column(6, actionButton("clear_all_species", "Clear All", icon = icon("times")))
+          ),
+          br(),
+          selectizeInput(
+            "species_picker", "Select Species:",
+            choices = names(species_choices),
+            multiple = TRUE,
+            options = list(
+              placeholder = "Search species...",
+              plugins = list("restore_on_backspace", "remove_button")
+            )
+          ),
+          hr(),
+          fluidRow(
+            column(6, actionButton("run_assessment", "Run", icon = icon("play"),
+                                   class="btn btn-primary btn-block")),
+            column(6, actionButton("reset_assessment", "Reset", icon = icon("refresh"),
+                                   class="btn btn-secondary btn-block"))
+          ),
+          helpText("Select one or more species to assess.")
+      ),
+      hr(),
+      div(class="sidebar-section", strong("Selected species:"), uiOutput("selected_species_display")),
+      hr(),
+      div(class="sidebar-section",
+          h4("Export Results"),
+          downloadButton("download_results", "Download CSV")
+      )
     ),
-    mainPanel(width = 9,
-              tabsetPanel(
-                tabPanel("Hotspot Map",
-                         div(class="map-section",
-                             leafletOutput("hotspot_map", height = "600px"),
-                             hr(),
-                             h3("Map Display Options"),
-                             radioButtons(
-                               "map_score_checkbox", "Map Display Metric:",
-                               choices = c(
-                                 "Normalized SpTEI" = "Normalized_SpTEI",
-                                 "Multi-Species Hotspot" = "MultiSpecies_Hotspot",
-                                 "Habitat Score" = "Normalized_Habitat_Score",
-                                 "Observation Score" = "Normalized_Observation_Score",
-                                 "Species Count" = "Species_count",
-                                 "Species Coverage" = "Species_coverage"),
-                               inline = TRUE),
-                             hr(),
-                             h3("Map Filters"),
-                             fluidRow(
-                               column(6, sliderInput("acreage_threshold", "Minimum Acres:", min = 0, max = max(COA_EMS$Acres, na.rm = TRUE), value = 0, step = 1)),
-                               column(6, sliderInput("threshold", "Minimum Score:", min = 0, max = 1, value = 0, step = 0.05))),
-                             hr(),
-                             h3("Species Data at Selected Location"),
-                             DTOutput("species_rank_table"),
-                             br(),
-                             h3("Observed / Expected Species"),
-                             tableOutput("obs_table"))),
-                tabPanel("Summary",
-                         br(),
-                         h3("Assessment Summary"),
-                         tableOutput("summary_table"),
-                         br(),
-                         h3("Top Habitat Types for Selected Species"),
-                         tableOutput("top_habitat_summary")),
-                tabPanel("Directions", directions_ui("directions")))
-    )
-  )
-)
+    mainPanel(
+      width = 9,
+      tabsetPanel(
+        tabPanel("Hotspot Map",
+                 div(class="map-section",
+                     leafletOutput("hotspot_map", height = "600px"),
+                     hr(),
+                     h3("Map Display Options"),
+                     radioButtons(
+                       "map_score_checkbox", "Map Display Metric:",
+                       choices = c(
+                         "Habitat Score" = "Normalized_Habitat_Score",
+                         "Observation Score" = "Normalized_Observation_Score",
+                         "Species Count" = "Species_count"
+                       ),
+                       inline = TRUE
+                     ),
+                     hr(),
+                     h3("Map Filters"),
+                     
+                     div(style = "width: 100%;",
+                         tags$style(HTML("
+                    #threshold .irs-grid-pol,
+                    #threshold .irs-grid-text,
+                    #acreage_threshold .irs-grid-pol,
+                    #acreage_threshold .irs-grid-text {display: block !important;}
+                  ")),
+                         div(style = "display: flex; gap: 20px;",
+                             # Threshold
+                             div(style="flex:1;",
+                                 sliderInput("threshold",
+                                             label = tags$span(style="font-size:20px; font-weight:bold;",
+                                                               "Current Map Display Score Threshold"),
+                                             min = 0, max = 1, value = 0, step = 0.10,
+                                             width = "100%", ticks = TRUE)
+                             ),
+                             # Acreage slider + numeric input
+                             div(style="flex:1;",
+                                 sliderInput("acreage_threshold",
+                                             label = tags$span(style="font-size:20px; font-weight:bold;",
+                                                               "Acreage Threshold"),
+                                             min = 0, max = max(COA_EMS$Acres, na.rm = TRUE),
+                                             value = 0, step = 1, width = "100%", ticks = TRUE),
+                                 div(style="margin-top:-5px;",
+                                     numericInput("acreage_threshold_box",
+                                                  label = tags$span(style="font-size:16px;", "Enter Acreage Value"),
+                                                  value = 0, min = 0, step = 1, width="100%"))
+                             ),
+                             # County filter
+                             div(style="flex:1;",
+                                 selectizeInput("county_filter",
+                                                label = tags$span(style="font-size:20px; font-weight:bold;",
+                                                                  "Filter by County"),
+                                                choices = NULL,
+                                                multiple = TRUE,
+                                                options = list(
+                                                  placeholder = "Select counties",
+                                                  plugins = list("remove_button")
+                                                )
+                                 )
+                             )
+                         )
+                     ),
+                     hr(),
+                     h3("Species Data at Selected Location"),
+                     uiOutput("selected_location_summary"),
+                     tags$details(
+                       tags$summary("Click to view score definitions"),
+                       tags$div(
+                         style="margin-left:15px; font-size:14px; color:#444;",
+                         tags$b("Habitat Score (0–5):"),
+                         tags$ul(
+                           tags$li("0 – Never utilized by species or detrimental"),
+                           tags$li("1 – Very infrequently used, traverse"),
+                           tags$li("2 – Occasionally used"),
+                           tags$li("3 – Unexceptional potential habitat"),
+                           tags$li("4 – Decent potential habitat that can support at least one life stage"),
+                           tags$li("5 – Best potential habitat that supports most or all life stages")
+                         ),
+                         tags$b("Observation Score (1–3):"),
+                         tags$ul(
+                           tags$li("1 – None or poor‑quality observations"),
+                           tags$li("2 – Mid‑grade observations"),
+                           tags$li("3 – High‑quality observations")
+                         )
+                       )
+                     ),
+                     DTOutput("species_rank_table"),
+                     br(),
+                     h3("Observed / Expected Species"),
+                     div(
+                       p("Species lists include all modeled species with a habitat rank of 3 or more. Observed species are those that have quality observation records within
+                         the HUC12 and Range Expected are those species with none or poor quality observations, but the HUC12 falls within the modeled range."),
+                       tableOutput("obs_table")
+                     )
+                 )
+        ),
+        tabPanel("Data Summary",
+                 br(),
+                 h3("Assessment Summary"),
+                 tableOutput("summary_table"),
+                 br(),
+                 h3("Top Habitat Types for Selected Species"),
+                 tags$details(
+                   tags$summary("This table summarizes only the top ranking habitat types (ranks 4 or 5) for the selected species. Click to view score definitions."),
+                   tags$div(
+                     style="margin-left:15px; font-size:14px; color:#444;",
+                     tags$b("Habitat Score (0–5):"),
+                     tags$ul(
+                       tags$li("4 – Decent potential habitat..."),
+                       tags$li("5 – Best potential habitat...")
+                     )
+                   )
+                 ),
+                 tableOutput("top_habitat_summary")
+        ),
+        tabPanel("Help",directions_ui("directions")),
+        tabPanel("Included Species", h3("Species Data Available in App"), DTOutput("all_species_table")
+        )
+      )  
+    )    
+  )      
+) 
 
 # SERVER
 server <- function(input, output, session) {
   directions_server("directions")
+  #full species list
+  output$all_species_table <- DT::renderDT({display_tbl <- metadata_species %>% select(Taxa_Group, Scientific_Name, Common_Name, Habitat_Clade, Game_Status)
+    DT::datatable(display_tbl, filter = "top", options = list(pageLength = 25, scrollX = TRUE, autoWidth = TRUE))
+  })
   # Core reactive values
   selected_species <- reactiveVal(character(0)) #species selected by user
   assessment_species <- reactiveVal(character(0)) #species used for assessment once run
@@ -212,12 +311,29 @@ server <- function(input, output, session) {
   #Filter species based on category selections
   active_filter <- reactiveVal("none")
   #map display reactive
-  map_score_selected <- reactive({
+    map_score_selected <- reactive({
     req(input$map_score_checkbox)
     input$map_score_checkbox
   })
+  #threshold sliders
   threshold_debounced <- debounce(reactive(input$threshold), 200)
   acreage_debounced <- debounce(reactive(input$acreage_threshold), 200)
+  #sync numeric box <-> slider
+  observeEvent(input$acreage_threshold_box, {updateSliderInput(session,"acreage_threshold",value = input$acreage_threshold_box)})
+  observeEvent(input$acreage_threshold, {updateNumericInput(session,"acreage_threshold_box",value = input$acreage_threshold)})
+  # Unique county list (split multi-county strings)
+  unique_counties <- reactive({
+    county_strings <- huc_county_joined$County_List
+    county_split <- strsplit(county_strings, ",\\s*")
+    sort(unique(unlist(county_split)))})
+  observeEvent(unique_counties(), {
+    updateSelectizeInput(
+      session,
+      "county_filter",
+      choices = unique_counties(),
+      server = TRUE
+    )
+  }, ignoreInit = FALSE, once = TRUE)
   #filter species list with group selection
   observeEvent(list(input$taxa_group, input$game_status, input$habitat_clade), {
     changed <- NULL
@@ -311,6 +427,14 @@ server <- function(input, output, session) {
     # CLEAR SPECIES SELECTION
     selected_species(character(0))
     assessment_species(character(0))
+    updateSelectizeInput(session, "species_picker", selected = character(0))
+    # CLEAR LOCATION SELECTION
+    selected_huc12(NULL)
+    selected_vegID(NULL)
+    # CLEAR LOCATION-DEPENDENT UI OUTPUTS
+    output$selected_location_summary <- renderUI({})
+    output$species_rank_table <- DT::renderDataTable({})
+    output$obs_table <- renderTable({})
     # RESET CATEGORY FILTERS
     updateSelectInput(session, "taxa_group", selected = "All")
     updateSelectInput(session, "game_status", selected = "All")
@@ -319,7 +443,7 @@ server <- function(input, output, session) {
     updateRadioButtons(session, "map_score_checkbox", selected="Normalized_SpTEI")
     # RESET THRESHOLDS
     updateSliderInput(session, "threshold", min = 0, max = 1, value = 0, step = 0.05)
-    updateSliderInput(session, "acreage_threshold", min = 0, max = 0, value = 0, step = 1)
+    updateSliderInput(session, "acreage_threshold", min = 0, max = 1, value = 0)
     # CLEAR MAP MARKERS & LEGEND
     leafletProxy("hotspot_map") %>%
       clearMarkers() %>%
@@ -367,10 +491,7 @@ server <- function(input, output, session) {
       )
     max_possible <- length(assessment_species()) * 15
     scores <- scores %>%
-      mutate(
-        Normalized_SpTEI      = SpTEI_Total / max_possible,
-        MultiSpecies_Hotspot  = sqrt(Normalized_SpTEI * Species_coverage)
-      )
+      mutate(Normalized_SpTEI      = SpTEI_Total / max_possible)
     scores %>%
       select(
         Veg_ID, HUC12,
@@ -378,18 +499,17 @@ server <- function(input, output, session) {
         Species_count, Species_total,
         Overall_Habitat_Score, Normalized_Habitat_Score,
         Overall_Observation_Score, Normalized_Observation_Score,
-        Species_coverage, MultiSpecies_Hotspot,
-        all_of(species_cols)
-      )
+        Species_coverage,
+        any_of(EMS_cols),       
+        all_of(species_cols))
   })
-  
   # JOIN SCORES TO LIGHTWEIGHT MAP POINTS
   hotspot_map_data <- reactive({
     req(assessment_species())
     scores <- hotspot_scores()
     # Pre-trim COA_EMS BEFORE joining (Huge performance win)
     ems_small <- COA_EMS %>%
-      select(Veg_ID, HUC12, Common_Name, Acres)
+      select(Veg_ID, HUC12, Habitat_Name, Acres)
     # Join lightweight tables
     hotspot_points %>%
       left_join(ems_small, by = c("Veg_ID", "HUC12")) %>%
@@ -407,7 +527,7 @@ server <- function(input, output, session) {
         ObjID,
         Veg_ID,
         HUC12,
-        Common_Name,
+        Habitat_Name,
         Acres,
         # HOTSPOT INFORMATION
         Normalized_SpTEI,
@@ -418,7 +538,6 @@ server <- function(input, output, session) {
         Overall_Observation_Score,
         Normalized_Observation_Score,
         Species_coverage,
-        MultiSpecies_Hotspot,
         # INDIVIDUAL SPECIES
         any_of(assessment_species()))})
   # SPECIES COUNT DISPLAY
@@ -436,7 +555,31 @@ server <- function(input, output, session) {
     selected_huc12(selected_huc)
     selected_vegID(selected_veg)
   })
-  #create species detail table
+  #create selected species detail table
+  habitat_name <- reactive({
+    req(selected_vegID(), selected_huc12())
+    COA_EMS %>%
+      filter(Veg_ID == selected_vegID(),
+             HUC12 == selected_huc12()) %>%
+      pull(Habitat_Name) %>%
+      unique() %>%
+      first()
+  })
+  output$selected_location_summary <- renderUI({
+    req(selected_vegID(), selected_huc12())
+    div(
+      style = "padding:10px;
+             background:#f2f2f2;
+             border:1px solid #ccc;
+             border-radius:6px;
+             margin-bottom:12px;
+             font-size:14px;",
+      tags$b("Selected Habitat Details"), tags$br(),
+      paste("Veg ID:", selected_vegID()), tags$br(),
+      paste("HUC12:", selected_huc12()), tags$br(),
+      paste("Habitat Name:", habitat_name())
+    )
+  })
   output$species_rank_table <- DT::renderDataTable({
     huc <- selected_huc12()
     veg <- selected_vegID()
@@ -449,27 +592,20 @@ server <- function(input, output, session) {
         Veg_ID == veg,
         Species %in% selected_sp
       ) %>%
-      select(Species, EMSRank, HUCRank) %>% 
-      left_join(
-        species_lookup %>% select(Species, Common_Name),
-        by = "Species"
-      ) %>%
-      select(
-        Common_Name,
-        Species,
-        EMSRank,
-        HUCRank
-      ) %>%
-      arrange(desc(EMSRank))
+      select(Veg_ID, HUC12, Species, EMSRank, HUCRank) %>% 
+      left_join(species_lookup %>% select(Species, Common_Name), by = "Species") %>%
+      left_join(COA_EMS %>% select(Veg_ID, HUC12, Habitat_Name), by = c("Veg_ID", "HUC12")) %>%
+      select(Common_Name,EMSRank,HUCRank) %>%
+      rename(`Habitat Score` = EMSRank, `Observation Score` = HUCRank) %>% 
+      arrange(desc(`Habitat Score`))
     DT::datatable(dat, options = list(pageLength = 20, deferRender = TRUE)) %>%
-      DT::formatStyle("EMSRank",backgroundColor = DT::styleInterval(4, c("white", "lightyellow")))
+      DT::formatStyle("Habitat Score",backgroundColor = DT::styleInterval(4, c("white", "lightyellow")))
   })
   #create species observation table - EMSRank 3+
   output$obs_table <- renderTable({
     huc <- selected_huc12()
     veg <- selected_vegID()
     req(huc, veg)
-    # Join obs → species_lookup → species_data to add Veg_ID + EMSRank
     dat <- obs %>%
       filter(HUC12 == huc) %>%
       left_join(species_lookup, by = "Species") %>%
@@ -497,19 +633,20 @@ server <- function(input, output, session) {
   # DYNAMIC THRESHOLD SLIDER RANGE
   observeEvent(
     list(map_score_selected(), assessment_species()),
-    {selected <- assessment_species()
+    {
+      selected <- assessment_species()
       req(selected)
       if (map_score_selected() %in%
-        c("Normalized_SpTEI",
-          "MultiSpecies_Hotspot",
-          "Normalized_Habitat_Score",
-          "Normalized_Observation_Score",
-          "Species_coverage")
-      ) {updateSliderInput(session,"threshold", min = 0, max = 1, value = 0, step = 0.05)
-      } else if (map_score_selected() == "Species_count") {updateSliderInput(session,"threshold", min = 0, max = length(selected), value = 0, step = 1)
-      } else if (map_score_selected() == "SpTEI_Total"
-      ) {updateSliderInput(session, "threshold", min = 0, max = length(selected) * 15, value = 0, step = 1)}
-    },ignoreInit = FALSE)
+          c("Normalized_SpTEI",
+            "Normalized_Habitat_Score",
+            "Normalized_Observation_Score",
+            "Species_coverage")) {
+        updateSliderInput(session, "threshold", min = 0, max = 1, value = 0, step = 0.05)
+      } else if (map_score_selected() == "Species_count") {
+        updateSliderInput(session, "threshold", min = 0, max = length(selected), value = 0, step = 1)
+      } else { updateSliderInput(session, "threshold", min = 0, max = length(selected) * 15, value = 0, step = 1)}
+    },
+    ignoreInit = FALSE)
   # HOTSPOT MAP
   output$hotspot_map <- renderLeaflet({
     huc12_poly_simplified <- sf::st_simplify(huc12_poly, dTolerance = 150, preserveTopology = TRUE)
@@ -521,40 +658,69 @@ server <- function(input, output, session) {
       setView(lng = -99.5, lat = 31.5, zoom = 6)})
   update_hotspot_map <- function() {
     req(assessment_species())
-    map_data <- hotspot_map_data() %>% filter(!is.na(Normalized_SpTEI))
-    score_values <- map_data[[map_score_selected()]]
-    map_data <- map_data %>% filter(score_values > 0)
-    keep_locations <- score_values[score_values > 0] >= threshold_debounced()
-    map_data <- map_data[keep_locations, ]
-    map_data <- map_data %>% filter(Acres >= acreage_debounced())
+    raw_map_data <- hotspot_map_data()
+    selected_metric <- map_score_selected()
+    full_scores <- raw_map_data[[selected_metric]]
+    full_scores <- full_scores[!is.na(full_scores) & full_scores > 0]
+    map_data <- raw_map_data %>%
+      filter(!is.na(.data[[selected_metric]])) %>%
+      filter(.data[[selected_metric]] > 0) %>%
+      filter(.data[[selected_metric]] >= threshold_debounced())
+    if (!is.null(input$county_filter) && length(input$county_filter) > 0) {
+      map_data <- map_data %>%
+        filter(purrr::map_lgl(
+          County_List,
+          function(x) {
+            counties <- unlist(strsplit(x, ",\\s*"))
+            any(counties %in% input$county_filter)
+          }
+        ))
+    }
+    score_values <- map_data[[selected_metric]]
+    # Filter: remove non-positive values
+    map_data <- map_data %>% filter(.data[[selected_metric]] > 0)
+    # Recompute score_values after filter
+    score_values <- map_data[[selected_metric]]
+    # Filter: apply threshold
+    map_data <- map_data %>% filter(.data[[selected_metric]] >= threshold_debounced())
+    # Recompute score_values again
+    score_values <- map_data[[selected_metric]]
     proxy <- leafletProxy("hotspot_map", data = map_data)
     proxy %>% clearMarkers() %>% clearControls()
-    # your color logic
-    if (map_score_selected() %in% c("Normalized_SpTEI","MultiSpecies_Hotspot", "Normalized_Habitat_Score", "Normalized_Observation_Score", "Species_coverage")) {
-      color_domain <- c(0,1)
-    } else if (map_score_selected() == "Species_count") {
+    # legend color logic
+    if (selected_metric %in% c(
+      "Normalized_SpTEI",
+      "Normalized_Habitat_Score",
+      "Normalized_Observation_Score",
+      "Species_coverage"
+    )) {
+      color_domain <- c(0, 1)
+    } else if (selected_metric == "Species_count") {
       color_domain <- c(0, length(assessment_species()))
-    } else {color_domain <- c(0, length(assessment_species()) * 15)}
-    pal <- colorNumeric("magma", domain = color_domain)
+    } else if (selected_metric == "Overall_Habitat_Score") {
+      color_domain <- range(full_scores, na.rm = TRUE)
+    } else if (selected_metric == "Overall_Observation_Score") {
+      color_domain <- range(full_scores, na.rm = TRUE)
+    } else {
+      # Fallback: use actual data range
+      color_domain <- range(full_scores, na.rm = TRUE)
+    }
+    pal <- colorNumeric("YlGnBu", domain = color_domain, reverse = FALSE)
     # marker radius logic
-    if (map_score_selected() %in% c("Normalized_SpTEI","MultiSpecies_Hotspot","Normalized_Habitat_Score","Normalized_Observation_Score")) {
-      marker_radius <- 3 + 8 * score_values
-    } else {marker_radius <- rep(6, length(score_values))}
+    {marker_radius <- rep(6, length(score_values))}
     # popup_text stays the same, use your existing block
     popup_text <- sprintf(
       "<b>Veg_ID:</b> %s<br>
-        <b>Common_Name:</b> %s<br>
-        <b>HUC12:</b> %s<br>
-        <b>Total Acres:</b> %s<br>
-        <b>County(ies):</b> %s<hr>
-        <b>Overall Score:</b> %.3f<br>
-        <b>Habitat Score:</b> %.3f<br>
-        <b>Observation Score:</b> %.3f<br>
-        <b>Species Count:</b> %s / %s<br>
-        <b>%% Species in Range:</b> %.1f%%<br>
-        <b>Potential Quality:</b> %.3f",
+      <b>Habitat_Name:</b> %s<br>
+      <b>HUC12:</b> %s<br>
+      <b>Total Acres:</b> %s<br>
+      <b>County(ies):</b> %s<hr>
+      <b>Overall Score:</b> %.3f<br>
+      <b>Habitat Score:</b> %.3f<br>
+      <b>Observation Score:</b> %.3f<br>
+      <b>Selected Species in Range:</b> %s / %s",
       map_data$Veg_ID,
-      map_data$Common_Name,
+      map_data$Habitat_Name,
       map_data$HUC12,
       formatC(map_data$Acres, digits = 2, format = "f", big.mark = ","),
       map_data$County_List,
@@ -562,9 +728,7 @@ server <- function(input, output, session) {
       map_data$Normalized_Habitat_Score,
       map_data$Normalized_Observation_Score,
       map_data$Species_count,
-      map_data$Species_total,
-      map_data$Species_coverage * 100,
-      map_data$MultiSpecies_Hotspot
+      map_data$Species_total
     )
     proxy %>% addCircleMarkers(
       radius = marker_radius,
@@ -578,11 +742,9 @@ server <- function(input, output, session) {
     proxy %>% addLegend(
       position = "bottomright",
       pal = pal,
-      values = color_domain,
+      values = full_scores,
       title = switch(
         map_score_selected(),
-        "Normalized_SpTEI" = "Normalized SpTEI",
-        "MultiSpecies_Hotspot" = "Multi-Species Hotspot",
         "Normalized_Habitat_Score"     = "Habitat Score",
         "Normalized_Observation_Score" = "Observation Score",
         "Species_count" = "Species Count",
@@ -615,43 +777,37 @@ server <- function(input, output, session) {
   observeEvent(threshold_debounced(), {update_hotspot_map()})
   #acreage threshold trigger
   observeEvent(acreage_debounced(), {update_hotspot_map()})
-  
+  #county filter trigger
+  observeEvent(input$county_filter, {update_hotspot_map()})
   # SUMMARY TABLES
   #top habitat summary
   top_habitat_summary <- reactive({
     req(length(assessment_species()) > 0)
     # Filter to selected species with EMSRank 4 or 5
     dat <- species_data %>%
-      filter(
-        Species %in% assessment_species(),
-        EMSRank %in% c(4, 5)
-      ) %>%
+      filter(Species %in% assessment_species(), EMSRank %in% c(4, 5)) %>%
       distinct(Veg_ID, Species, EMSRank)   # important fix
     # Veg_ID + Species duplicates removed
     if (nrow(dat) == 0) {
       return(tibble(
         Veg_ID = character(0),
         Common_Name = character(0),
-        Species_Count = numeric(0),
-        EMS_Score = numeric(0),
-        Species_List = character(0)
-      ))
+        Species_count = numeric(0),
+        Habitat_Score = numeric(0),
+        Species_List = character(0)))
     }
     habitat_summary <- dat %>%
       group_by(Veg_ID) %>%
-      summarise(
-        Species_Count = n_distinct(Species),
-        EMS_Score = max(EMSRank, na.rm = TRUE),
+      summarise(Species_count = n_distinct(Species),
+        Habitat_Score = max(EMSRank, na.rm = TRUE),
         Species_List = paste(sort(unique(Species)), collapse = ", "),
         .groups = "drop"
       ) %>%
-      left_join(
-        COA_EMS %>%
-          distinct(Veg_ID, .keep_all = TRUE) %>%    # <-- solves duplicate issue
-          select(Veg_ID, Common_Name),
-        by = "Veg_ID"
-      ) %>%
-      arrange(desc(EMS_Score), desc(Species_Count))  # <-- correct ordering
+      left_join(COA_EMS %>%
+          distinct(Veg_ID, .keep_all = TRUE) %>%
+          select(Veg_ID, Habitat_Name), by = "Veg_ID") %>%
+      mutate(Habitat_Score = as.integer(Habitat_Score)) %>%
+      arrange(desc(Species_count), desc(Habitat_Score))  
     habitat_summary
   })
   output$top_habitat_summary <- renderTable({
@@ -662,20 +818,23 @@ server <- function(input, output, session) {
     renderTable({
       req(length(assessment_species()) > 0)
       scores <- hotspot_scores()
-      tibble(Metric = c("Locations assessed", "Maximum possible SpTEI", "Mean Hotspot Score", "Maximum Hotspot Score",
-          "Mean Species Coverage", "Maximum Species Count", "Mean Multi-Species Hotspot"),
-        Value = c(nrow(scores),
-          length(assessment_species()) * 15,
-          round(mean(scores$Normalized_SpTEI, na.rm = TRUE), 3),
-          round(max(scores$Normalized_SpTEI, na.rm = TRUE), 3), 
-          round(mean(scores$Species_coverage, na.rm = TRUE), 3),
-          max(scores$Species_count, na.rm = TRUE), 
-          round(mean(scores$MultiSpecies_Hotspot, na.rm = TRUE), 3)))})
+      # Identify all EMS columns
+      EMS_cols <- grep("_EMS$", names(scores), value = TRUE)
+      # Count locations with ANY EMSRank >= 3
+      locations_with_ems3plus <- sum(apply(scores[EMS_cols], 1, function(x) any(x >= 3, na.rm = TRUE)))
+      tibble(Metric = c("Number of Potential Habitat Points","Mean Hotspot Score", "Maximum Hotspot Score",
+          "Mean Species Coverage", "Maximum Species Count"),
+        Value = c(formatC(locations_with_ems3plus, format = "f", digits = 0, big.mark = ","),
+                  formatC(mean(scores$Normalized_SpTEI, na.rm = TRUE), format = "f", digits = 2),
+                  formatC(max(scores$Normalized_SpTEI, na.rm = TRUE), format = "f", digits = 2),
+                  formatC(mean(scores$Species_coverage, na.rm = TRUE), format = "f", digits = 2),
+                  formatC(max(scores$Species_count, na.rm = TRUE), format = "f", digits = 2)))})
   # SELECTED SPECIES TABLE
   output$selected_species_table <-
     renderTable({
       selected <- assessment_species()
-      species_metadata %>%
+      metadata_species %>%
+        left_join(species_lookup %>% select(Species, Species_Key), by = "Species_Key") %>%
         filter(Species %in% selected) %>%
         select(
           Species,
